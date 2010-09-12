@@ -31,18 +31,27 @@
 #include <sys/wait.h>
 #include <netinet/in.h>
 
+#include "myproposal.h"  // taken from real SSH5.6
+
 void keep_busy(int);
 
 // #define JJDEBUG 1
+
+const char *mystring="SSH-2.0-OpenSSH_5.3\r\n";
 
 
 int
 main()
 {
   int s, s2, sin_len, sockaddr_len, result, one=1;
+  int fake_packet_len, proposals, payload_len;
+  int buffer_pointer, temp_int;
+
   pid_t mypid, forkpid;
   struct sockaddr_in min_sockaddr;
   struct sigaction mysig;
+  char proposal_buffer[35000];
+  char kexinit_buffer[4096];
 
   s = socket(AF_INET, SOCK_STREAM, 0);
   if (s == NULL) {
@@ -93,6 +102,46 @@ main()
   mysig.sa_handler = SIG_IGN;
   sigaction(SIGCHLD, &mysig, NULL);
 
+  /* Calculate the fake proposal packet once */
+
+  temp_int=0;
+  buffer_pointer=0;
+  kexinit_buffer[0]=20;  // SSH_MSG_KEXINIT = 20
+  bcopy(mystring, &kexinit_buffer[1], 16); // using OpenSSH5.3 .. as 'random bytes'
+  buffer_pointer=16;  // we have written 17 bytes into it
+
+  for (proposals=0; proposals < sizeof(myproposal)/sizeof(*myproposal); proposals++)
+    {
+      int prop_len=strlen(myproposal[proposals]);
+
+      temp_int=htonl(prop_len);
+      bcopy(&temp_int, &kexinit_buffer[buffer_pointer], 4);
+      buffer_pointer += 4;
+      if (prop_len) {
+	bcopy(&myproposal[proposals], 
+	      &kexinit_buffer[buffer_pointer], prop_len);
+	buffer_pointer += prop_len;
+      }
+    }
+  kexinit_buffer[buffer_pointer++]=0; // boolean for kex-packet-follows
+
+  temp_int=4;
+  bcopy(&kexinit_buffer[buffer_pointer], &temp_int, 4); // last 4 zero bytes.
+  buffer_pointer += 4;
+
+  // now we know the packet length.
+  temp_int=htonl(1+16+1+4 + buffer_pointer);
+  // KEXINIT + cookie + boolean + reserved uint32 + the payload
+  bcopy(&temp_int, &proposal_buffer[0], 4);
+
+  fake_packet_len=((1+16+1+4 + buffer_pointer + 4 + 1)/8)+1)*8;
+  
+  // minimum random padding (4) plus the lenght byte for it,
+  // then rounded to nearest multiple of eight
+  
+
+  /* start the loop */
+stanna:
   mypid=getpid();
 
   while (1) {
@@ -130,7 +179,6 @@ keep_busy(int s2) {
   int retcode, socklen, gai_return, loops=0;
   time_t now, then;
   //  double timediff;
-  const char *mystring="SSH-2.0-OpenSSH_5.3\r\n";
   struct sockaddr_storage peersock;
   char buf[64];
   char remotename[NI_MAXHOST];
