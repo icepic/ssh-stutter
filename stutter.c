@@ -133,14 +133,37 @@ main()
 
   // now we know the packet length.
   temp_int=htonl(1+16+1+4 + buffer_pointer);
+#ifdef JJDEBUG
+  printf("kexinit size %d\n", temp_int);
+#endif // JJDEBUG
   // KEXINIT + cookie + boolean + reserved uint32 + the payload
   bcopy(&temp_int, &proposal_buffer[0], 4);
+
 
   fake_packet_len=(((1+16+1+4 + buffer_pointer + 4 + 1)/8)+1)*8;
   
   // minimum random padding (4) plus the lenght byte for it,
   // then rounded to nearest multiple of eight
-  
+
+  //padding_length is the even-8-byte-len minus the real length
+  proposal_buffer[4]=fake_packet_len - (1+16+1+4 + buffer_pointer + 4 + 1);
+#ifdef JJDEBUG
+  printf("padding size %d\n",
+	 fake_packet_len - (1+16+1+4 + buffer_pointer + 4 + 1));
+#endif // JJDEBUG
+
+  // packet_len includes the calculated padding length
+
+  // add the kexinit payload 
+  bcopy(&kexinit_buffer[0], &proposal_buffer[5], buffer_pointer);
+  // add padding (the OpenSSH string comes handy again
+  bcopy(mystring, &proposal_buffer[5+buffer_pointer],
+	(size_t)proposal_buffer[4]);
+#ifdef JJDEBUG
+  printf("SSH packet size %d\n", 5+buffer_pointer+proposal_buffer[4]);
+#endif // JJDEBUG
+
+
 
   /* start the loop */
   mypid=getpid();
