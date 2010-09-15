@@ -15,10 +15,12 @@
  */
 
 
+#include <err.h>
 #include <errno.h>
 #include <netdb.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
 #include <time.h>
@@ -43,11 +45,11 @@ const char *mystring="SSH-2.0-OpenSSH_5.3\r\n";
 int
 main()
 {
-  int s, s2, sin_len, sockaddr_len, result, one=1;
-  int fake_packet_len, proposals, payload_len;
+  int s, s2, sockaddr_len, one=1;
+  int fake_packet_len, proposals;
   int buffer_pointer, temp_int;
 
-  pid_t mypid, forkpid;
+  pid_t mypid;
   struct sockaddr_in min_sockaddr;
   struct sigaction mysig;
   char proposal_buffer[35000];
@@ -134,14 +136,13 @@ main()
   // KEXINIT + cookie + boolean + reserved uint32 + the payload
   bcopy(&temp_int, &proposal_buffer[0], 4);
 
-  fake_packet_len=((1+16+1+4 + buffer_pointer + 4 + 1)/8)+1)*8;
+  fake_packet_len=(((1+16+1+4 + buffer_pointer + 4 + 1)/8)+1)*8;
   
   // minimum random padding (4) plus the lenght byte for it,
   // then rounded to nearest multiple of eight
   
 
   /* start the loop */
-stanna:
   mypid=getpid();
 
   while (1) {
