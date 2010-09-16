@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Janne Johansson <jj@openbsd.org>
+ * Copyright (c) 2009-2010 Janne Johansson <jj@openbsd.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -40,6 +40,7 @@ void keep_busy(int);
 // #define JJDEBUG 1
 
 const char *mystring="SSH-2.0-OpenSSH_5.3\r\n";
+char proposal_buffer[35000];
 
 
 int
@@ -52,7 +53,6 @@ main()
   pid_t mypid;
   struct sockaddr_in min_sockaddr;
   struct sigaction mysig;
-  char proposal_buffer[35000];
   char kexinit_buffer[4096];
 
   s = socket(AF_INET, SOCK_STREAM, 0);
@@ -107,7 +107,6 @@ main()
   /* Calculate the fake proposal packet once */
 
   temp_int=0;
-  buffer_pointer=0;
   kexinit_buffer[0]=20;  // SSH_MSG_KEXINIT = 20
   bcopy(mystring, &kexinit_buffer[1], 16); // using OpenSSH5.3 .. as 'random bytes'
   buffer_pointer=16;  // we have written 17 bytes into it
@@ -122,25 +121,31 @@ main()
       if (prop_len) {
 	bcopy(&myproposal[proposals], 
 	      &kexinit_buffer[buffer_pointer], prop_len);
-	buffer_pointer += prop_len;
       }
+      buffer_pointer += prop_len;
+#ifdef JJDEBUG
+      printf("size now is: %d\n",buffer_pointer);
+#endif // JJDEBUG
     }
   kexinit_buffer[buffer_pointer++]=0; // boolean for kex-packet-follows
 
-  temp_int=4;
+  temp_int=0;
   bcopy(&kexinit_buffer[buffer_pointer], &temp_int, 4); // last 4 zero bytes.
   buffer_pointer += 4;
 
   // now we know the packet length.
   temp_int=htonl(1+16+1+4 + buffer_pointer);
 #ifdef JJDEBUG
-  printf("kexinit size %d\n", temp_int);
+  printf("kexinit size %d\n", ntohl(temp_int));
 #endif // JJDEBUG
   // KEXINIT + cookie + boolean + reserved uint32 + the payload
   bcopy(&temp_int, &proposal_buffer[0], 4);
 
 
   fake_packet_len=(((1+16+1+4 + buffer_pointer + 4 + 1)/8)+1)*8;
+#ifdef JJDEBUG
+  printf("packet_len is now thought to be %d\n", fake_packet_len);
+#endif // JJDEBUG
   
   // minimum random padding (4) plus the lenght byte for it,
   // then rounded to nearest multiple of eight
@@ -156,14 +161,26 @@ main()
 
   // add the kexinit payload 
   bcopy(&kexinit_buffer[0], &proposal_buffer[5], buffer_pointer);
-  // add padding (the OpenSSH string comes handy again
+#ifdef JJDEBUG
+      printf("kexinit size is: %d\n",buffer_pointer);
+#endif // JJDEBUG
+  // add padding (the fixed OpenSSH version string comes handy again)
   bcopy(mystring, &proposal_buffer[5+buffer_pointer],
 	(size_t)proposal_buffer[4]);
+
+
+  // final size calculation of the complete SSH packet.
+  // size should be 1 for the padding length byte, plus
+  // the kexinit packet (buffer_pointer), plus the random
+  // padding (stored in the fifth byte already), plus 4 for
+  // the empty MAC checksum.
 #ifdef JJDEBUG
-  printf("SSH packet size %d\n", 5+buffer_pointer+proposal_buffer[4]);
+  printf("SSH packet size %d\n", fake_packet_len);
 #endif // JJDEBUG
+  temp_int=fake_packet_len;
+  bcopy(&temp_int, &proposal_buffer[0], sizeof(temp_int));
 
-
+  // now the packet is good to send.
 
   /* start the loop */
   mypid=getpid();
@@ -241,6 +258,7 @@ keep_busy(int s2) {
   memset (&buf, 0, sizeof(buf));
 
 
+  /* old repeat what the other side said code
   retcode=0;
   while ((loops < 5) && (retcode != -1))
     {
@@ -258,9 +276,9 @@ keep_busy(int s2) {
 	  sleep(1);
 	  break;
 	}
-      retcode=read(s2, buf, 1);
+      retcode=read(s2, &buf, 1);
     }
-
+  */
   if(getpeername(s2, (struct sockaddr *)&peersock, &socklen)==0) {
     getnameinfo((struct sockaddr *)&peersock, socklen,
 		remotename, sizeof(remotename),
