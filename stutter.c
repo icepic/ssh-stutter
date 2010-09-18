@@ -35,7 +35,7 @@
 
 #include "myproposal.h"  // taken from real SSH5.6
 
-void keep_busy(int);
+void keep_busy(int, int);
 
 // #define JJDEBUG 1
 
@@ -119,8 +119,11 @@ main()
       bcopy(&temp_int, &kexinit_buffer[buffer_pointer], 4);
       buffer_pointer += 4;
       if (prop_len) {
-	bcopy(&myproposal[proposals], 
+	bcopy(myproposal[proposals],
 	      &kexinit_buffer[buffer_pointer], prop_len);
+#ifdef JJDEBUG
+	printf("string_%s_\n",myproposal[proposals]);
+#endif
       }
       buffer_pointer += prop_len;
 #ifdef JJDEBUG
@@ -136,7 +139,8 @@ main()
   // now we know the packet length.
   temp_int=htonl(1+16+1+4 + buffer_pointer);
 #ifdef JJDEBUG
-  printf("kexinit size %d\n", ntohl(temp_int));
+  printf("kexinit size %d, buffer pointer %d + 22\n",
+	 ntohl(temp_int), buffer_pointer);
 #endif // JJDEBUG
   // KEXINIT + cookie + boolean + reserved uint32 + the payload
   bcopy(&temp_int, &proposal_buffer[0], 4);
@@ -191,7 +195,7 @@ main()
     if (s2 != -1) {
       switch (fork()) {
       case 0:
-	keep_busy(s2);
+	keep_busy(s2, fake_packet_len);
 	_exit(0);
       case -1:
 	/* in case we cant fork, no action right now */
@@ -215,13 +219,13 @@ main()
 }
 
 void
-keep_busy(int s2) {
+keep_busy(int s2, int buffer_size) {
 
-  int retcode, socklen, gai_return, loops=0;
+  int socklen, gai_return;
   time_t now, then;
   //  double timediff;
   struct sockaddr_storage peersock;
-  char buf[64];
+  char buf[35000];
   char remotename[NI_MAXHOST];
 
   if (chdir("/var/empty")==0 && s2 > 2) {
@@ -257,8 +261,7 @@ keep_busy(int s2) {
   write(s2,&buf,strlen(mystring));
   memset (&buf, 0, sizeof(buf));
 
-
-  /* old repeat what the other side said code
+  /* old "repeat what the other side said" code
   retcode=0;
   while ((loops < 5) && (retcode != -1))
     {
@@ -279,6 +282,17 @@ keep_busy(int s2) {
       retcode=read(s2, &buf, 1);
     }
   */
+
+  write(s2, &proposal_buffer, buffer_size);
+  //when they respond to this, it will hopefully take a lot of time
+  
+  while (read(s2, buf, 1) == 1) {
+    sleep(1);
+#ifdef JJDEBUG
+    printf("got this byte %x", buf[0]);
+#endif
+  }
+
   if(getpeername(s2, (struct sockaddr *)&peersock, &socklen)==0) {
     getnameinfo((struct sockaddr *)&peersock, socklen,
 		remotename, sizeof(remotename),
