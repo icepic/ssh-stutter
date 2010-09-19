@@ -108,8 +108,8 @@ main()
 
   temp_int=0;
   kexinit_buffer[0]=20;  // SSH_MSG_KEXINIT = 20
-  bcopy(mystring, &kexinit_buffer[1], 16); // using OpenSSH5.3 .. as 'random bytes'
-  buffer_pointer=16;  // we have written 17 bytes into it
+  bcopy(mystring, &kexinit_buffer[1], 16); // using SSH2.0-  as 'random bytes'
+  buffer_pointer=17;  // we have written 17 bytes into it
 
   for (proposals=0; proposals < sizeof(myproposal)/sizeof(*myproposal); proposals++)
     {
@@ -121,13 +121,11 @@ main()
       if (prop_len) {
 	bcopy(myproposal[proposals],
 	      &kexinit_buffer[buffer_pointer], prop_len);
-#ifdef JJDEBUG
-	printf("string_%s_\n",myproposal[proposals]);
-#endif
       }
       buffer_pointer += prop_len;
 #ifdef JJDEBUG
-      printf("size now is: %d\n",buffer_pointer);
+      printf("prop len %d, hex %x\n",prop_len, prop_len);
+	printf("size now is: %d\n",buffer_pointer);
 #endif // JJDEBUG
     }
   kexinit_buffer[buffer_pointer++]=0; // boolean for kex-packet-follows
@@ -181,7 +179,7 @@ main()
 #ifdef JJDEBUG
   printf("SSH packet size %d\n", fake_packet_len);
 #endif // JJDEBUG
-  temp_int=fake_packet_len;
+  temp_int=htonl(fake_packet_len);
   bcopy(&temp_int, &proposal_buffer[0], sizeof(temp_int));
 
   // now the packet is good to send.
