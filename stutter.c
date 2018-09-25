@@ -33,7 +33,8 @@
 #include <sys/wait.h>
 #include <netinet/in.h>
 
-#include "myproposal.h"  // taken from real SSH5.6
+#include "kex.h"
+#include "myproposal.h"  // taken from real SSH
 
 void keep_busy(int, int);
 
@@ -53,10 +54,11 @@ main()
   pid_t mypid;
   struct sockaddr_in min_sockaddr;
   struct sigaction mysig;
+  char *myproposal[PROPOSAL_MAX] = { KEX_SERVER };
   char kexinit_buffer[4096];
 
   s = socket(AF_INET, SOCK_STREAM, 0);
-  if (s == NULL) {
+  if (!s) {
     err(1,"socket() call failed");
   }
 
